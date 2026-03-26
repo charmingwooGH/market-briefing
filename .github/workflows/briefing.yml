@@ -2,7 +2,7 @@ name: US Market Briefing
 
 on:
   schedule:
-    - cron: '20 11 * * 1-5'
+    - cron: '0 12 * * 1-5'
   workflow_dispatch:
 
 jobs:
