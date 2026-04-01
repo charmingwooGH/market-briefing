@@ -1,58 +1,90 @@
 import os
 import urllib.request
 import json
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import yfinance as yf
 
-def get_change_emoji(change):
-    if change > 0:
-        return "🔴"
-    elif change < 0:
-        return "🔵"
-    return "⚪️"
+KST = timezone(timedelta(hours=9))
 
-def format_index(name, ticker):
-    data = yf.Ticker(ticker)
-    hist = data.history(period="2d")
-    if len(hist) < 2:
-        return f"{name}: 데이터 없음"
-    prev_close = hist['Close'].iloc[-2]
-    close = hist['Close'].iloc[-1]
-    change = close - prev_close
-    pct = (change / prev_close) * 100
-    emoji = get_change_emoji(change)
-    sign = "+" if change > 0 else ""
-    return f"{emoji} {name}: {close:,.2f} ({sign}{change:,.2f}, {sign}{pct:.2f}%)"
+
+def get_emoji(change, up_is_good=True):
+    """굿 = 🟢, 배드 = 🔴, 보합 = ⚪️"""
+    if abs(change) < 1e-6:
+        return "⚪️"
+    if change > 0:
+        return "🟢" if up_is_good else "🔴"
+    else:
+        return "🟢" if not up_is_good else "🔴"
+
+
+def format_item(name, ticker, up_is_good=True, decimals=2):
+    try:
+        data = yf.Ticker(ticker)
+        hist = data.history(period="5d")
+        if len(hist) < 2:
+            return f"⚪️ {name}: 데이터 없음"
+        prev_close = hist["Close"].iloc[-2]
+        close = hist["Close"].iloc[-1]
+        change = close - prev_close
+        pct = (change / prev_close) * 100
+        emoji = get_emoji(change, up_is_good)
+        sign = "+" if change > 0 else ""
+        fmt = f",.{decimals}f"
+        return f"{emoji} {name}: {close:{fmt}} ({sign}{change:{fmt}}, {sign}{pct:.2f}%)"
+    except Exception:
+        return f"⚪️ {name}: 데이터 없음"
+
 
 def send_telegram(token, chat_id, message):
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    data = json.dumps({"chat_id": chat_id, "text": message}).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+    payload = json.dumps({"chat_id": chat_id, "text": message}).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=payload, headers={"Content-Type": "application/json"}
+    )
     with urllib.request.urlopen(req) as resp:
         return json.loads(resp.read().decode())
+
 
 def main():
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
-    date_str = datetime.utcnow().strftime("%Y-%m-%d")
+
+    now_kst = datetime.now(KST)
+    date_str = now_kst.strftime("%Y-%m-%d (%a)")
 
     lines = [
-        "📊 미국 증시 브리핑",
-        f"📅 {date_str} (전일 종가 기준)",
-        "━━━━━━━━━━━━━━━━━━━━",
-        "",
-        "[ 주요 지수 ]",
-        format_index("다우존스", "^DJI"),
-        format_index("S&P 500", "^GSPC"),
-        format_index("나스닥", "^IXIC"),
-        format_index("필라델피아 반도체", "^SOX"),
+        "📊 데일리 마켓 브리핑",
+        f"📅 {date_str}",
         "",
         "━━━━━━━━━━━━━━━━━━━━",
-        "🔴 상승  🔵 하락  ⚪️ 보합",
+        "[ MACRO ]",
+        format_item("WTI 원유", "CL=F", up_is_good=False),
+        format_item("미국 10Y", "^TNX", up_is_good=False),
+        format_item("달러인덱스", "DX-Y.NYB", up_is_good=False),
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "[ US MKT ]",
+        format_item("다우존스", "^DJI"),
+        format_item("S&P 500", "^GSPC"),
+        format_item("나스닥", "^IXIC"),
+        format_item("필라델피아 반도체", "^SOX"),
+        format_item("마이크론", "MU"),
+        format_item("엔비디아", "NVDA"),
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "[ KR MKT ]",
+        format_item("EWY", "EWY"),                              # 상승 = 굿
+        format_item("코스피200 선물", "^KS200", up_is_good=True), # 야간선물 대용
+        format_item("원/달러", "KRW=X", up_is_good=False),       # 하락(원화강세) = 굿
+        format_item("한국 10Y", "KR10YT=RR", up_is_good=False),  # 하락 = 굿
+        "",
+        "━━━━━━━━━━━━━━━━━━━━",
+        "🟢 긍정  🔴 부정  ⚪️ 보합",
     ]
 
     send_telegram(token, chat_id, "\n".join(lines))
     print("전송 완료!")
+
 
 if __name__ == "__main__":
     main()
