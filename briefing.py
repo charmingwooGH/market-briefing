@@ -53,33 +53,29 @@ def main():
     date_str = now_kst.strftime("%Y-%m-%d (%a)")
 
     lines = [
-        "📊 데일리 마켓 브리핑",
         f"📅 {date_str}",
         "",
         "━━━━━━━━━━━━━━━━━━━━",
         "[ MACRO ]",
-        format_item("WTI 원유", "CL=F", up_is_good=False),
-        format_item("미국 10Y", "^TNX", up_is_good=False),
-        format_item("달러인덱스", "DX-Y.NYB", up_is_good=False),
+        format_item("WTI", "CL=F", up_is_good=False),
+        format_item("US 10Y", "^TNX", up_is_good=False),
+        format_item("DXY", "DX-Y.NYB", up_is_good=False),
         "",
         "━━━━━━━━━━━━━━━━━━━━",
         "[ US MKT ]",
-        format_item("다우존스", "^DJI"),
-        format_item("S&P 500", "^GSPC"),
-        format_item("나스닥", "^IXIC"),
-        format_item("필라델피아 반도체", "^SOX"),
-        format_item("마이크론", "MU"),
-        format_item("엔비디아", "NVDA"),
+        format_item("DJI", "^DJI"),
+        format_item("S&P500", "^GSPC"),
+        format_item("Nasdaq", "^IXIC"),
+        format_item("MU", "MU"),
+        format_item("NVDA", "NVDA"),
         "",
         "━━━━━━━━━━━━━━━━━━━━",
         "[ KR MKT ]",
-        format_item("EWY", "EWY"),                              # 상승 = 굿
-        format_item("코스피200 선물", "^KS200", up_is_good=True), # 야간선물 대용
-        format_item("원/달러", "KRW=X", up_is_good=False),       # 하락(원화강세) = 굿
-        format_item("한국 10Y", "KR10YT=RR", up_is_good=False),  # 하락 = 굿
+        format_item("EWY", "EWY"),
+        format_item("SOX", "^SOX"),
+        format_item("KRW/$", "KRW=X", up_is_good=False),
         "",
         "━━━━━━━━━━━━━━━━━━━━",
-        "🟢 긍정  🔴 부정  ⚪️ 보합",
     ]
 
     send_telegram(token, chat_id, "\n".join(lines))
