@@ -1,8 +1,9 @@
-name: US Market Briefing
+name: Daily Market Briefing
 
 on:
   schedule:
-    - cron: '0 12 * * 1-5'
+    # KST 오전 6시 = UTC 전날 21시, 월~금(KST) = 일~목(UTC)
+    - cron: '0 21 * * 0-4'
   workflow_dispatch:
 
 jobs:
@@ -10,15 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install dependencies
         run: pip install yfinance
-
       - name: Run briefing
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
