@@ -48,7 +48,7 @@ def generate_report(market_data, fear_greed):
     ])
 
     system = """당신은 매크로 애널리스트입니다. 웹검색으로 오늘 뉴스를 확인한 뒤, 반드시 순수 JSON만 출력하세요.
-규칙: 코드블록 없음, 명사형 종결, 각 문자열 50자 이내, 특수문자 사용 금지."""
+규칙: 코드블록 없음, 명사형 종결, 각 문자열 50자 이내, 특수문자 사용 금지, 반드시 한국어로만 작성."""
 
     user = f"""오늘({today}) 글로벌 금융시장 주요 뉴스를 검색한 뒤, 아래 데이터를 참고해 JSON을 작성하세요.
 
@@ -57,6 +57,7 @@ FNG: {fear_greed['value']}/100
 
 출력할 JSON 키: report_date, section1_issues(5개:title+detail), section2_chains(4개:name+steps+insight), section3_sectors(benefit+damage 각5개:name+reason), section4_companies(benefit+damage 각5개:type+logic), section5_sentiment(overall+fng_value+indicators6개각각name+value+level+signal+contrarian_comment+scenarios3개각각name+content), section6_matrix(issues5개+compound_effects3개각각title+content+kr_investor_points3개)
 
+모든 텍스트는 반드시 한국어로만 작성하세요.
 {{ 로 시작하는 JSON만 출력:"""
 
     messages = [{"role": "user", "content": user}]
@@ -102,46 +103,94 @@ FNG: {fear_greed['value']}/100
         repaired = repair_json(text)
         return json.loads(repaired)
 
-# ── 3. 공통 CSS ──────────────────────────────────────────────────────────
+# ── 3. 공통 CSS (흰 배경 / 클린 디자인) ─────────────────────────────────
 
 BASE_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
 * { margin:0; padding:0; box-sizing:border-box; }
 body {
   font-family: 'Noto Sans KR', sans-serif;
-  background: #0d1117;
-  color: #e6edf3;
+  background: #ffffff;
+  color: #1a1a2e;
   width: 960px;
-  padding: 44px 52px 52px;
+  padding: 48px 56px 56px;
 }
 .hdr {
   display: flex; justify-content: space-between; align-items: flex-end;
-  border-bottom: 1px solid #30363d; padding-bottom: 18px; margin-bottom: 28px;
+  border-bottom: 2px solid #1a1a2e; padding-bottom: 16px; margin-bottom: 32px;
 }
-.hdr-title { font-size: 20px; font-weight: 700; color: #58a6ff; letter-spacing: -0.3px; }
-.hdr-sub   { font-size: 12px; color: #484f58; }
-.tag { font-size: 10px; font-weight: 700; letter-spacing: 1.8px; color: #484f58; text-transform: uppercase; margin-bottom: 18px; }
-.card { background: #161b22; border: 1px solid #21262d; border-radius: 8px; padding: 18px 22px; margin-bottom: 12px; }
-.card-title { font-size: 14px; font-weight: 700; color: #f0f6fc; margin-bottom: 8px; }
-.card-body  { font-size: 12.5px; color: #8b949e; line-height: 1.75; }
-.badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
-.bg   { background:#122820; color:#3fb950; border:1px solid #238636; }
-.br   { background:#2d1214; color:#f85149; border:1px solid #da3633; }
-.g    { color:#3fb950; } .r { color:#f85149; } .y { color:#e3b341; } .b { color:#58a6ff; }
-table { width:100%; border-collapse:collapse; }
-th { font-size:11px; font-weight:700; color:#58a6ff; letter-spacing:1px; padding:8px 12px; text-align:left; border-bottom:1px solid #21262d; }
-td { font-size:12.5px; padding:9px 12px; border-bottom:1px solid #0d1117; vertical-align:top; line-height:1.6; }
-td:first-child { font-weight:600; white-space:nowrap; min-width:140px; }
-.insight { background:#1c2128; border-left:3px solid #388bfd; border-radius:4px; padding:10px 14px; margin-top:10px; font-size:12px; color:#8b949e; line-height:1.65; }
-.step { display:flex; align-items:flex-start; margin-bottom:7px; font-size:12.5px; color:#c9d1d9; }
-.arr  { color:#388bfd; margin-right:8px; flex-shrink:0; }
-.footer { margin-top:28px; padding-top:14px; border-top:1px solid #21262d; font-size:11px; color:#30363d; text-align:right; }
+.hdr-title { font-size: 22px; font-weight: 700; color: #1a1a2e; letter-spacing: -0.5px; }
+.hdr-date  { font-size: 12px; color: #888; font-weight: 400; }
+.hdr-badge {
+  display: inline-block; background: #1a1a2e; color: #fff;
+  font-size: 10px; font-weight: 600; letter-spacing: 1.5px;
+  padding: 3px 10px; border-radius: 2px; margin-bottom: 6px;
+}
+.section-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 2px;
+  color: #999; text-transform: uppercase; margin-bottom: 16px;
+}
+.card {
+  border: 1px solid #e8e8e8; border-radius: 6px;
+  padding: 18px 22px; margin-bottom: 10px;
+  background: #fafafa;
+}
+.card:hover { background: #f5f5f5; }
+.card-title { font-size: 14px; font-weight: 700; color: #1a1a2e; margin-bottom: 7px; }
+.card-body  { font-size: 13px; color: #555; line-height: 1.8; }
+.snap-bar {
+  background: #f8f9fa; border: 1px solid #e8e8e8; border-radius: 6px;
+  padding: 14px 20px; margin-bottom: 28px; display: flex;
+  flex-wrap: wrap; gap: 6px 0; align-items: center;
+}
+.snap-item { margin-right: 28px; font-size: 13px; }
+.snap-label { color: #999; font-size: 11px; margin-right: 4px; }
+.snap-val   { font-weight: 700; font-size: 14px; }
+.snap-chg   { font-size: 11px; margin-left: 3px; }
+.g  { color: #0066cc; }
+.r  { color: #cc3300; }
+.y  { color: #cc8800; }
+.b  { color: #0066cc; }
+.pill {
+  display: inline-block; padding: 3px 12px; border-radius: 20px;
+  font-size: 11px; font-weight: 600; margin-bottom: 14px;
+}
+.pill-g { background: #e8f4e8; color: #1a7a1a; border: 1px solid #b3d9b3; }
+.pill-r { background: #fde8e8; color: #cc0000; border: 1px solid #f0b3b3; }
+table { width: 100%; border-collapse: collapse; }
+thead tr { background: #1a1a2e; }
+thead th {
+  font-size: 11px; font-weight: 600; color: #fff;
+  padding: 10px 14px; text-align: left; letter-spacing: 0.5px;
+}
+tbody tr { border-bottom: 1px solid #ebebeb; }
+tbody tr:last-child { border-bottom: none; }
+tbody tr:nth-child(even) { background: #fafafa; }
+td { font-size: 13px; padding: 10px 14px; vertical-align: top; line-height: 1.65; color: #333; }
+td:first-child { font-weight: 600; color: #1a1a2e; white-space: nowrap; min-width: 130px; }
+.insight {
+  background: #f0f4ff; border-left: 3px solid #0066cc;
+  border-radius: 4px; padding: 10px 14px; margin-top: 10px;
+  font-size: 12.5px; color: #444; line-height: 1.7;
+}
+.step {
+  display: flex; align-items: flex-start;
+  margin-bottom: 8px; font-size: 13px; color: #333;
+}
+.arr { color: #0066cc; margin-right: 10px; flex-shrink: 0; font-weight: 700; }
+.divider { border: none; border-top: 1px solid #ebebeb; margin: 20px 0; }
 </style>
 """
 
-def hdr(title, date):
-    return f'<div class="hdr"><div class="hdr-title">{title}</div><div class="hdr-sub">{date} · AI Research Dashboard</div></div>'
+def hdr(title, badge, date):
+    return f'''<div class="hdr">
+  <div>
+    <div class="hdr-badge">{badge}</div>
+    <div class="hdr-title">{title}</div>
+  </div>
+  <div class="hdr-date">{date}</div>
+</div>'''
 
 # ── 4. 섹션별 HTML ───────────────────────────────────────────────────────
 
@@ -153,10 +202,14 @@ def html_s1(d, mkt, fg):
             c = mkt[k]['change']
             cls = 'g' if c >= 0 else 'r'
             sign = '+' if c >= 0 else ''
-            snap += f'<span style="margin-right:22px"><span style="color:#484f58;font-size:11px">{k} </span><span class="{cls}" style="font-size:13px;font-weight:600">{mkt[k]["value"]}</span><span style="font-size:11px;color:#484f58"> ({sign}{c:.1f}%)</span></span>'
+            snap += f'''<span class="snap-item">
+  <span class="snap-label">{k}</span>
+  <span class="snap-val {cls}">{mkt[k]["value"]}</span>
+  <span class="snap-chg {cls}">({sign}{c:.1f}%)</span>
+</span>'''
     fv = int(fg['value']) if str(fg['value']).isdigit() else 50
     fg_cls = 'r' if fv < 25 else 'y' if fv < 50 else 'g'
-    snap += f'<span><span style="color:#484f58;font-size:11px">F&G </span><span class="{fg_cls}" style="font-size:13px;font-weight:600">{fg["value"]}/100</span></span>'
+    snap += f'<span class="snap-item"><span class="snap-label">공포탐욕</span><span class="snap-val {fg_cls}">{fg["value"]}/100</span></span>'
 
     issues = ""
     circles = "①②③④⑤"
@@ -164,65 +217,81 @@ def html_s1(d, mkt, fg):
         issues += f'<div class="card"><div class="card-title">{circles[i]} {iss.get("title","")}</div><div class="card-body">{iss.get("detail","")}</div></div>'
 
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("📌 핵심 글로벌 이슈", d.get('report_date',''))}
-<div style="background:#161b22;border:1px solid #21262d;border-radius:8px;padding:12px 18px;margin-bottom:24px;overflow:hidden">{snap}</div>
-<div class="tag">Top Global Issues · {len(d.get('section1_issues',[]))}</div>
+{hdr("핵심 글로벌 이슈", "SECTION 01", d.get('report_date',''))}
+<div class="snap-bar">{snap}</div>
+<div class="section-label">오늘의 주요 이슈 · {len(d.get('section1_issues',[]))}건</div>
 {issues}
-<div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다. 투자 판단의 최종 책임은 투자자 본인에게 있습니다.</div>
 </body></html>"""
 
 def html_s2(d):
     chains = ""
     for ch in d.get('section2_chains', []):
         steps = "".join([f'<div class="step"><span class="arr">→</span><span>{s}</span></div>' for s in ch.get('steps', [])])
-        chains += f'<div class="card"><div class="card-title">{ch.get("name","")}</div>{steps}<div class="insight">💡 {ch.get("insight","")}</div></div>'
+        chains += f'<div class="card"><div class="card-title">{ch.get("name","")}</div><hr class="divider">{steps}<div class="insight">💡 {ch.get("insight","")}</div></div>'
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("🔗 인과관계 체인 분석", d.get('report_date',''))}
-<div class="tag">Causal Chain Analysis</div>
+{hdr("인과관계 체인 분석", "SECTION 02", d.get('report_date',''))}
+<div class="section-label">Causal Chain Analysis</div>
 {chains}
-<div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다.</div>
 </body></html>"""
 
 def html_s3(d):
-    def rows(items, emoji, cls):
+    def rows(items, cls):
         return "".join([
-            f'<tr><td><span class="{cls}">{emoji} {it.get("name","")}</span></td><td class="card-body">{it.get("reason","")}</td></tr>'
+            f'<tr><td class="{cls}">{it.get("name","")}</td><td>{it.get("reason","")}</td></tr>'
             for it in items
         ])
     sec = d.get('section3_sectors', {})
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("🟢 수혜 / 🔴 피해 섹터", d.get('report_date',''))}
-<div class="tag">Sector Impact Analysis</div>
-<div class="card" style="margin-bottom:16px">
-  <div style="margin-bottom:12px"><span class="badge bg">수혜 섹터</span></div>
-  <table><tr><th>섹터</th><th>수혜 근거</th></tr>{rows(sec.get('benefit',[]),'🟢','g')}</table>
+{hdr("수혜 · 피해 섹터", "SECTION 03", d.get('report_date',''))}
+<div class="section-label">섹터별 영향 분석</div>
+<div style="margin-bottom:20px">
+  <div class="pill pill-g">수혜 섹터</div>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>섹터</th><th>수혜 근거</th></tr></thead>
+      <tbody>{rows(sec.get('benefit',[]), 'g')}</tbody>
+    </table>
+  </div>
 </div>
-<div class="card">
-  <div style="margin-bottom:12px"><span class="badge br">피해 섹터</span></div>
-  <table><tr><th>섹터</th><th>피해 근거</th></tr>{rows(sec.get('damage',[]),'🔴','r')}</table>
+<div>
+  <div class="pill pill-r">피해 섹터</div>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>섹터</th><th>피해 근거</th></tr></thead>
+      <tbody>{rows(sec.get('damage',[]), 'r')}</tbody>
+    </table>
+  </div>
 </div>
-<div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다.</div>
 </body></html>"""
 
 def html_s4(d):
-    def rows(items, emoji, cls):
+    def rows(items, cls):
         return "".join([
-            f'<tr><td style="font-size:12px"><span class="{cls}">{emoji}</span> {it.get("type","")}</td><td class="card-body">{it.get("logic","")}</td></tr>'
+            f'<tr><td class="{cls}">{it.get("type","")}</td><td>{it.get("logic","")}</td></tr>'
             for it in items
         ])
     sec = d.get('section4_companies', {})
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("🏢 수혜 / 피해 기업 유형", d.get('report_date',''))}
-<div class="tag">Company Type Impact</div>
-<div class="card" style="margin-bottom:16px">
-  <div style="margin-bottom:12px"><span class="badge bg">수혜 기업</span></div>
-  <table><tr><th>기업 유형</th><th>투자 논리</th></tr>{rows(sec.get('benefit',[]),'🟢','g')}</table>
+{hdr("수혜 · 피해 기업 유형", "SECTION 04", d.get('report_date',''))}
+<div class="section-label">기업 유형별 영향 분석</div>
+<div style="margin-bottom:20px">
+  <div class="pill pill-g">수혜 기업</div>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>기업 유형</th><th>투자 논리</th></tr></thead>
+      <tbody>{rows(sec.get('benefit',[]), 'g')}</tbody>
+    </table>
+  </div>
 </div>
-<div class="card">
-  <div style="margin-bottom:12px"><span class="badge br">피해 기업</span></div>
-  <table><tr><th>기업 유형</th><th>피해 논리</th></tr>{rows(sec.get('damage',[]),'🔴','r')}</table>
+<div>
+  <div class="pill pill-r">피해 기업</div>
+  <div class="card" style="padding:0">
+    <table>
+      <thead><tr><th>기업 유형</th><th>피해 논리</th></tr></thead>
+      <tbody>{rows(sec.get('damage',[]), 'r')}</tbody>
+    </table>
+  </div>
 </div>
-<div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다.</div>
 </body></html>"""
 
 def html_s5(d):
@@ -230,49 +299,50 @@ def html_s5(d):
     fv_raw = str(s.get('fng_value', '50'))
     fv = int(fv_raw) if fv_raw.isdigit() else 50
     fg_cls = 'r' if fv < 25 else 'y' if fv < 50 else 'g'
+
     inds = "".join([
         f'<tr><td>{ind.get("name","")}</td>'
-        f'<td class="y">{ind.get("value", ind.get("current", ind.get("score", "")))}</td>'
-        f'<td style="font-size:12px;color:#8b949e">{ind.get("level", ind.get("status",""))}</td>'
-        f'<td style="font-size:12px;color:#58a6ff">{ind.get("signal", ind.get("interpretation",""))}</td></tr>'
+        f'<td class="{fg_cls}" style="font-weight:700">{ind.get("value", ind.get("current", ind.get("score", "")))}</td>'
+        f'<td>{ind.get("level", ind.get("status",""))}</td>'
+        f'<td class="b">{ind.get("signal", ind.get("interpretation",""))}</td></tr>'
         for ind in s.get('indicators', [])
     ])
     scens = "".join([
-        f'<div style="margin-bottom:9px;font-size:12.5px"><span class="b">▸</span> <strong style="color:#f0f6fc">{sc.get("name","")}</strong>: <span class="card-body">{sc.get("content", sc.get("description",""))}</span></div>'
+        f'''<div class="card" style="margin-bottom:8px">
+  <div class="card-title">{sc.get("name","")}</div>
+  <div class="card-body">{sc.get("content", sc.get("description",""))}</div>
+</div>'''
         for sc in s.get('scenarios', [])
     ])
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("📊 시장 심리 정량 분석", d.get('report_date',''))}
-<div class="tag">Sentiment & Quantitative Analysis</div>
-<div class="card" style="margin-bottom:14px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-    <div class="card-title">종합 판정: <span class="{fg_cls}">{s.get('overall','')}</span></div>
-    <div class="badge br">Fear&Greed {fv_raw}/100</div>
-  </div>
-  <table><tr><th>지표</th><th>현재값</th><th>수준</th><th>시그널</th></tr>{inds}</table>
+{hdr("시장 심리 정량 분석", "SECTION 05", d.get('report_date',''))}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+  <div class="section-label" style="margin-bottom:0">공포·탐욕 지수 분석</div>
+  <div class="pill {'pill-r' if fv < 25 else 'pill-g'}">종합 판정: {s.get('overall','')}</div>
 </div>
-<div class="card" style="margin-bottom:14px">
-  <div class="card-title" style="margin-bottom:8px">역발상(Contrarian) 분석</div>
+<div class="card" style="padding:0;margin-bottom:20px">
+  <table>
+    <thead><tr><th>지표</th><th>현재값</th><th>수준</th><th>시그널</th></tr></thead>
+    <tbody>{inds}</tbody>
+  </table>
+</div>
+<div class="section-label">역발상 분석</div>
+<div class="card" style="margin-bottom:20px">
   <div class="card-body">{s.get('contrarian_comment', s.get('contrarian',''))}</div>
 </div>
-<div class="card">
-  <div class="card-title" style="margin-bottom:12px">시나리오 전망</div>
-  {scens}
-</div>
-<div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다.</div>
+<div class="section-label">시나리오 전망</div>
+{scens}
 </body></html>"""
 
 def html_s6(d):
     s = d.get('section6_matrix', {})
-
-    # issues가 문자열이든 딕셔너리든 처리
     raw_issues = s.get('issues', ['①','②','③','④','⑤'])
     issues = []
     for iss in raw_issues:
         if isinstance(iss, dict):
-            issues.append(iss.get('title', iss.get('name', str(iss)))[:7])
+            issues.append(iss.get('title', iss.get('name', str(iss)))[:8])
         else:
-            issues.append(str(iss)[:7])
+            issues.append(str(iss)[:8])
     short = issues
 
     symbols = [['—','▲강화','▲강화','▲강화','▲강화'],
@@ -280,40 +350,41 @@ def html_s6(d):
                ['—','▲고착','—','▲강화','▼완화'],
                ['▼완화','▼완화','▼압력','—','▲강화'],
                ['▲악화','▲추가','—','▲위축','—']]
-    header_cells = "".join([f'<th style="font-size:10px">{s}</th>' for s in short])
+
+    header_cells = "".join([f'<th style="font-size:10px;text-align:center">{s}</th>' for s in short])
     matrix_rows = ""
     for i, row in enumerate(symbols):
-        if i >= len(short):
-            break
+        if i >= len(short): break
         cells = "".join([
-            f'<td style="font-size:11px;text-align:center;color:#484f58">—</td>' if cell == '—'
-            else f'<td style="font-size:11px;text-align:center;color:{"#3fb950" if "강화" in cell or "추가" in cell else "#f85149"}">{cell}</td>'
+            f'<td style="font-size:11px;text-align:center;color:#bbb">—</td>' if cell == '—'
+            else f'<td style="font-size:11px;text-align:center;font-weight:600;color:{"#0066cc" if "강화" in cell or "추가" in cell else "#cc3300"}">{cell}</td>'
             for cell in row
         ])
-        matrix_rows += f'<tr><td style="font-size:11px;color:#58a6ff;font-weight:600">{short[i]}</td>{cells}</tr>'
+        matrix_rows += f'<tr><td style="font-size:12px;font-weight:700;color:#1a1a2e">{short[i]}</td>{cells}</tr>'
 
     compound = "".join([
         f'<div class="card"><div class="card-title">{"①②③"[i]} {ef.get("title","") if isinstance(ef, dict) else str(ef)}</div><div class="card-body">{ef.get("content","") if isinstance(ef, dict) else ""}</div></div>'
         for i, ef in enumerate(s.get('compound_effects', [])[:3])
     ])
     kr_pts = "".join([
-        f'<div style="margin-bottom:7px;font-size:12.5px"><span class="b">▸</span> <span class="card-body">{pt.get("point", pt) if isinstance(pt, dict) else pt}</span></div>'
+        f'<div style="display:flex;align-items:flex-start;margin-bottom:10px;font-size:13px"><span style="color:#0066cc;font-weight:700;margin-right:10px;flex-shrink:0">▸</span><span style="color:#333;line-height:1.7">{pt.get("point", pt) if isinstance(pt, dict) else pt}</span></div>'
         for pt in s.get('kr_investor_points', [])
     ])
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("⚡ 크로스 임팩트 매트릭스", d.get('report_date',''))}
-<div class="tag">Cross-Impact Matrix</div>
-<div class="card" style="margin-bottom:16px">
-  <table><tr><th></th>{header_cells}</tr>{matrix_rows}</table>
+{hdr("크로스 임팩트 매트릭스", "SECTION 06", d.get('report_date',''))}
+<div class="section-label">이슈 간 상호작용 분석</div>
+<div class="card" style="padding:0;margin-bottom:24px">
+  <table>
+    <thead><tr><th></th>{header_cells}</tr></thead>
+    <tbody>{matrix_rows}</tbody>
+  </table>
 </div>
-<div class="tag">핵심 복합 효과</div>
+<div class="section-label">핵심 복합 효과</div>
 {compound}
-<div class="card" style="margin-top:4px">
-  <div class="card-title" style="margin-bottom:12px">🇰🇷 한국 투자자 포인트</div>
-  {kr_pts}
-</div>
-<div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다. 투자 판단의 최종 책임은 투자자 본인에게 있습니다.</div>
+<div class="section-label" style="margin-top:20px">한국 투자자 포인트</div>
+<div class="card">{kr_pts}</div>
 </body></html>"""
+
 # ── 5. HTML → PNG / PDF ──────────────────────────────────────────────────
 
 def html_to_png(html, path):
@@ -331,9 +402,9 @@ def html_to_pdf(sections_html, path):
     from playwright.sync_api import sync_playwright
     combined = """<!DOCTYPE html><html><head><meta charset="UTF-8">
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap');
       * { margin:0; padding:0; box-sizing:border-box; }
-      body { font-family:'Noto Sans KR',sans-serif; background:#0d1117; color:#e6edf3; }
+      body { font-family:'Noto Sans KR',sans-serif; background:#fff; color:#1a1a2e; }
       .pg { page-break-after:always; padding:40px 48px; }
       .pg:last-child { page-break-after:avoid; }
     </style></head><body>"""
@@ -411,7 +482,7 @@ def main():
     html_to_pdf(htmls, pdf_path)
 
     print("⑥ 텔레그램 전송...")
-    tg_document(pdf_path, f'📊 글로벌 매크로 브리핑 {today}', TOKEN, CHAT_ID)
+    tg_document(pdf_path, f'글로벌 매크로 브리핑 {today}', TOKEN, CHAT_ID)
     tg_media_group(img_paths, TOKEN, CHAT_ID)
 
     print("완료!")
