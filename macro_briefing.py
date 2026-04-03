@@ -264,8 +264,17 @@ def html_s5(d):
 
 def html_s6(d):
     s = d.get('section6_matrix', {})
-    issues = s.get('issues', ['①','②','③','④','⑤'])
-    short = [iss[:7] for iss in issues]
+
+    # issues가 문자열이든 딕셔너리든 처리
+    raw_issues = s.get('issues', ['①','②','③','④','⑤'])
+    issues = []
+    for iss in raw_issues:
+        if isinstance(iss, dict):
+            issues.append(iss.get('title', iss.get('name', str(iss)))[:7])
+        else:
+            issues.append(str(iss)[:7])
+    short = issues
+
     symbols = [['—','▲강화','▲강화','▲강화','▲강화'],
                ['▲강화','—','▲강화','▲강화','▲강화'],
                ['—','▲고착','—','▲강화','▼완화'],
@@ -274,6 +283,8 @@ def html_s6(d):
     header_cells = "".join([f'<th style="font-size:10px">{s}</th>' for s in short])
     matrix_rows = ""
     for i, row in enumerate(symbols):
+        if i >= len(short):
+            break
         cells = "".join([
             f'<td style="font-size:11px;text-align:center;color:#484f58">—</td>' if cell == '—'
             else f'<td style="font-size:11px;text-align:center;color:{"#3fb950" if "강화" in cell or "추가" in cell else "#f85149"}">{cell}</td>'
@@ -282,11 +293,11 @@ def html_s6(d):
         matrix_rows += f'<tr><td style="font-size:11px;color:#58a6ff;font-weight:600">{short[i]}</td>{cells}</tr>'
 
     compound = "".join([
-        f'<div class="card"><div class="card-title">{"①②③"[i]} {ef.get("title","")}</div><div class="card-body">{ef.get("content","")}</div></div>'
+        f'<div class="card"><div class="card-title">{"①②③"[i]} {ef.get("title","") if isinstance(ef, dict) else str(ef)}</div><div class="card-body">{ef.get("content","") if isinstance(ef, dict) else ""}</div></div>'
         for i, ef in enumerate(s.get('compound_effects', [])[:3])
     ])
     kr_pts = "".join([
-        f'<div style="margin-bottom:7px;font-size:12.5px"><span class="b">▸</span> <span class="card-body">{pt}</span></div>'
+        f'<div style="margin-bottom:7px;font-size:12.5px"><span class="b">▸</span> <span class="card-body">{pt.get("point", pt) if isinstance(pt, dict) else pt}</span></div>'
         for pt in s.get('kr_investor_points', [])
     ])
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
@@ -303,7 +314,6 @@ def html_s6(d):
 </div>
 <div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다. 투자 판단의 최종 책임은 투자자 본인에게 있습니다.</div>
 </body></html>"""
-
 # ── 5. HTML → PNG / PDF ──────────────────────────────────────────────────
 
 def html_to_png(html, path):
