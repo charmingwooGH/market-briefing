@@ -1,10 +1,43 @@
-import os, json, re, requests, time
+import os, json, re, requests
 import yfinance as yf
 from datetime import datetime
 import anthropic
 from json_repair import repair_json
 
 # ── 1. 데이터 수집 ───────────────────────────────────────────────────────
+
+def get_market_data():
+    tickers = {
+        'WTI유': 'CL=F', 'Brent유': 'BZ=F', '금': 'GC=F',
+        'S&P500': '^GSPC', '나스닥': '^IXIC', '다우': '^DJI',
+        'VIX': '^VIX', '미국10Y금리': '^TNX',
+        '달러인덱스': 'DX-Y.NYB', 'USD/KRW': 'KRW=X',
+        'KOSPI': '^KS11', 'SOX(반도체)': '^SOX',
+    }
+    results = {}
+    for name, ticker in tickers.items():
+        try:
+            hist = yf.Ticker(ticker).history(period='5d')
+            if len(hist) >= 2:
+                cur, prv = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
+                chg = (cur - prv) / prv * 100
+                results[name] = {'value': f"{cur:,.2f}", 'change': chg}
+            elif len(hist) == 1:
+                results[name] = {'value': f"{hist['Close'].iloc[-1]:,.2f}", 'change': 0}
+            else:
+                results[name] = {'value': 'N/A', 'change': 0}
+        except:
+            results[name] = {'value': '오류', 'change': 0}
+    return results
+
+def get_fear_greed():
+    try:
+        d = requests.get('https://api.alternative.me/fng/', timeout=10).json()['data'][0]
+        return {'value': d['value'], 'label': d['value_classification']}
+    except:
+        return {'value': '50', 'label': 'Neutral'}
+
+# ── 2. Claude API 리포트 생성 ────────────────────────────────────────────
 
 def generate_report(market_data, fear_greed):
     client = anthropic.Anthropic(api_key=os.environ['ANTHROPIC_API_KEY'])
@@ -32,7 +65,7 @@ FNG: {fear_greed['value']}/100
     print("   Claude API 호출 (웹검색 + 리포트 생성)...")
     while True:
         response = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-haiku-4-5-20251001",
             max_tokens=3000,
             system=system,
             tools=tools,
