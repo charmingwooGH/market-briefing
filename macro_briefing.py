@@ -46,117 +46,110 @@ def generate_report(market_data, fear_greed):
         for k, v in market_data.items()
     ])
 
-    prompt = f"""당신은 글로벌 매크로 전략 애널리스트입니다.
-오늘({today}) 한국 주식시장 개장 전 매크로 브리핑을 작성하세요.
+    # ── 1단계: 웹검색으로 뉴스 수집 ──────────────────────────────
+    print("   웹검색 중...")
+    news_response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=3000,
+        tools=[{"type": "web_search_20250305", "name": "web_search"}],
+        messages=[{"role": "user", "content": f"""오늘({today}) 글로벌 금융시장에 영향을 미치는 주요 매크로 뉴스를 검색해서 요약해주세요.
+다음 항목을 검색하세요:
+1. 미국 연준(Fed) 금리 관련 최신 뉴스
+2. 글로벌 지정학 리스크 (중동, 미중 무역 등)
+3. 유가/에너지 시장 동향
+4. 미국 경제지표 발표 (CPI, PPI, 고용 등)
+5. 한국 증시에 영향을 미칠 오늘의 주요 이벤트
 
-## 현재 시장 데이터:
-{market_str}
-- Fear & Greed Index: {fear_greed['value']}/100 ({fear_greed['label']})
+검색 후 각 항목별로 2~3줄로 요약해주세요. 한국어로 답변하세요."""}]
+    )
 
-## 지시사항:
-1. 웹 검색으로 오늘의 최신 글로벌 매크로 뉴스를 확인하세요
-2. 아래 JSON 스키마를 정확히 따르세요
-3. 마크다운 코드블록 없이 순수 JSON만 반환하세요
+    news_text = ""
+    for block in news_response.content:
+        if hasattr(block, 'text'):
+            news_text += block.text
+    print(f"   뉴스 수집 완료 ({len(news_text)}자)")
 
-{{
-  "report_date": "{today}",
-  "section1_issues": [
-    {{"title": "이슈 제목", "detail": "상세 설명 2~3줄"}}
-  ],
-  "section2_chains": [
-    {{"name": "체인명 (예: 체인 A: 전쟁→에너지)", "steps": ["단계1", "단계2", "단계3", "단계4"], "insight": "핵심 연결고리 한 줄"}}
-  ],
-  "section3_sectors": {{
-    "benefit": [{{"name": "섹터명", "reason": "근거 한 줄"}}],
-    "damage":  [{{"name": "섹터명", "reason": "근거 한 줄"}}]
-  }},
-  "section4_companies": {{
-    "benefit": [{{"type": "기업 유형", "logic": "투자 논리 한 줄"}}],
-    "damage":  [{{"type": "기업 유형", "logic": "피해 논리 한 줄"}}]
-  }},
-  "section5_sentiment": {{
-    "overall": "종합 판정 (예: 극단 공포)",
-    "fng_value": "{fear_greed['value']}",
-    "indicators": [
-      {{"name": "지표명", "value": "값/100", "level": "수준", "signal": "시그널 한 줄"}}
-    ],
-    "contrarian_comment": "역발상 분석 2~3줄",
-    "scenarios": [
-      {{"name": "시나리오 A", "content": "내용 한 줄"}},
-      {{"name": "시나리오 B", "content": "내용 한 줄"}},
-      {{"name": "기본 시나리오", "content": "내용 한 줄"}}
-    ]
-  }},
-  "section6_matrix": {{
+    # ── 2단계: JSON 리포트 생성 (웹검색 없이) ────────────────────
+    print("   리포트 생성 중...")
+
+    schema = '''{
+  "report_date": "날짜",
+  "section1_issues": [{"title": "이슈 제목", "detail": "설명"}],
+  "section2_chains": [{"name": "체인명", "steps": ["단계1", "단계2", "단계3"], "insight": "핵심"}],
+  "section3_sectors": {
+    "benefit": [{"name": "섹터명", "reason": "근거"}],
+    "damage": [{"name": "섹터명", "reason": "근거"}]
+  },
+  "section4_companies": {
+    "benefit": [{"type": "기업유형", "logic": "논리"}],
+    "damage": [{"type": "기업유형", "logic": "논리"}]
+  },
+  "section5_sentiment": {
+    "overall": "종합판정",
+    "fng_value": "숫자",
+    "indicators": [{"name": "지표명", "value": "값", "level": "수준", "signal": "시그널"}],
+    "contrarian_comment": "역발상 분석",
+    "scenarios": [{"name": "시나리오A", "content": "내용"}, {"name": "시나리오B", "content": "내용"}, {"name": "기본시나리오", "content": "내용"}]
+  },
+  "section6_matrix": {
     "issues": ["①이슈1", "②이슈2", "③이슈3", "④이슈4", "⑤이슈5"],
-    "compound_effects": [
-      {{"title": "복합 효과 제목", "content": "내용 2줄"}}
-    ],
-    "kr_investor_points": ["한국 투자자 관점 포인트 1", "포인트 2", "포인트 3"]
-  }}
-}}
+    "compound_effects": [{"title": "제목", "content": "내용"}],
+    "kr_investor_points": ["포인트1", "포인트2", "포인트3"]
+  }
+}'''
 
-섹션별 개수 기준: issues 5개, chains 4~5개, sectors 각 5개, companies 각 5개, indicators 6개, compound_effects 3개"""
+    report_response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=4000,
+        messages=[{"role": "user", "content": f"""아래 시장 데이터와 뉴스를 바탕으로 매크로 리포트를 JSON으로 작성하세요.
 
-    messages = [{"role": "user", "content": prompt}]
-    tools = [{"type": "web_search_20250305", "name": "web_search"}]
+## 시장 데이터:
+{market_str}
+Fear & Greed Index: {fear_greed['value']}/100 ({fear_greed['label']})
 
-    # ── 아gentic loop: 웹검색 툴 호출이 끝날 때까지 반복 ──
-    while True:
-        response = client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=4000,
-            tools=tools,
-            messages=messages
-        )
+## 오늘의 주요 뉴스:
+{news_text}
 
-        # assistant 메시지 누적
-        messages.append({"role": "assistant", "content": response.content})
+## 출력 규칙:
+- 반드시 순수 JSON만 출력 (앞뒤 설명 없이)
+- 코드블록(```) 사용 금지
+- 모든 문자열에서 큰따옴표 내부에 큰따옴표 사용 금지
+- 줄바꿈 문자(\\n) 사용 금지, 문장은 한 줄로 작성
+- 아래 스키마를 정확히 따를 것
 
-        # stop_reason이 end_turn이면 최종 응답
-        if response.stop_reason == "end_turn":
-            break
+## 스키마:
+{schema}
 
-        # tool_use가 있으면 tool_result를 messages에 추가하고 계속
-        if response.stop_reason == "tool_use":
-            tool_results = []
-            for block in response.content:
-                if block.type == "tool_use":
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": ""  # SDK가 자동으로 웹검색 결과를 채워줌
-                    })
-            messages.append({"role": "user", "content": tool_results})
-        else:
-            break
+## 개수 기준:
+- section1_issues: 5개
+- section2_chains: 4개
+- section3_sectors benefit/damage: 각 5개
+- section4_companies benefit/damage: 각 5개
+- section5_sentiment indicators: 6개
+- section6_matrix compound_effects: 3개, kr_investor_points: 3개
 
-    # 최종 텍스트 추출
+지금 바로 {{ 로 시작하는 JSON을 출력하세요:"""}]
+    )
+
     text = ""
-    for block in response.content:
+    for block in report_response.content:
         if hasattr(block, 'text'):
             text += block.text
     text = text.strip()
 
-    # 코드블록 제거
-    if '```' in text:
-        parts = text.split('```')
-        for part in parts:
-            if part.startswith('json'):
-                text = part[4:].strip()
-                break
-            elif '{' in part:
-                text = part.strip()
-                break
-
-    # JSON 시작점 찾기
+    # JSON 추출
     start = text.find('{')
     end = text.rfind('}')
     if start != -1 and end != -1:
         text = text[start:end+1]
 
-    return json.loads(text)
-
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        print(f"JSON 파싱 오류: {e}")
+        print(f"응답 텍스트 (첫 500자): {text[:500]}")
+        raise
+        
 # ── 3. 공통 CSS ──────────────────────────────────────────────────────────
 
 BASE_CSS = """
