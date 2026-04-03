@@ -1,15 +1,16 @@
-import os, json, re, requests
+import os, json, re, requests, time
 import yfinance as yf
 from datetime import datetime
 import anthropic
+from json_repair import repair_json
 
 # ── 1. 데이터 수집 ───────────────────────────────────────────────────────
 
 def get_market_data():
     tickers = {
-        'WTI': 'CL=F', 'Brent': 'BZ=F', 'GOLD': 'GC=F',
+        'WTI유': 'CL=F', 'Brent유': 'BZ=F', '금': 'GC=F',
         'S&P500': '^GSPC', '나스닥': '^IXIC', '다우': '^DJI',
-        'VIX': '^VIX', '미국10Y': '^TNX',
+        'VIX': '^VIX', '미국10Y금리': '^TNX',
         '달러인덱스': 'DX-Y.NYB', 'USD/KRW': 'KRW=X',
         'KOSPI': '^KS11', 'SOX(반도체)': '^SOX',
     }
@@ -39,7 +40,6 @@ def get_fear_greed():
 # ── 2. Claude API 리포트 생성 ────────────────────────────────────────────
 
 def generate_report(market_data, fear_greed):
-    import re, time
     client = anthropic.Anthropic(api_key=os.environ['ANTHROPIC_API_KEY'])
     today = datetime.now().strftime('%Y년 %m월 %d일')
     market_str = "\n".join([
@@ -57,8 +57,8 @@ def generate_report(market_data, fear_greed):
     )
     news_text = "".join(b.text for b in news_response.content if hasattr(b, 'text'))
     news_text = news_text[:400]
-    print(f"   뉴스 수집 완료. 60초 대기 중...")
-    time.sleep(65)  # rate limit 초기화 대기
+    print(f"   뉴스 수집 완료. 65초 대기 중...")
+    time.sleep(65)
 
     # ── 2단계: JSON 리포트 생성 ───────────────────────────────────
     print("   리포트 생성 중...")
@@ -70,7 +70,7 @@ FNG: {fear_greed['value']}/100
 날짜: {today}
 
 JSON구조(각항목실제내용으로채울것):
-report_date, 
+report_date,
 section1_issues(5개: title+detail),
 section2_chains(4개: name+steps배열+insight),
 section3_sectors(benefit5개+damage5개: name+reason),
@@ -96,9 +96,9 @@ section6_matrix(issues5개+compound_effects3개+kr_investor_points3개)
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
-        print(f"JSON 오류: {e}")
-        print(f"문제위치: {text[max(0,e.pos-150):e.pos+150]}")
-        raise
+        print(f"JSON 오류 발생, 자동 복구 시도 중... ({e})")
+        repaired = repair_json(text)
+        return json.loads(repaired)
 
 # ── 3. 공통 CSS ──────────────────────────────────────────────────────────
 
@@ -264,7 +264,7 @@ def html_s6(d):
     for i, row in enumerate(symbols):
         cells = "".join([
             f'<td style="font-size:11px;text-align:center;color:#484f58">—</td>' if cell == '—'
-            else f'<td style="font-size:11px;text-align:center;color:{"#3fb950" if "강화" in cell or "추가" in cell else "#f85149"}"> {cell}</td>'
+            else f'<td style="font-size:11px;text-align:center;color:{"#3fb950" if "강화" in cell or "추가" in cell else "#f85149"}">{cell}</td>'
             for cell in row
         ])
         matrix_rows += f'<tr><td style="font-size:11px;color:#58a6ff;font-weight:600">{short[i]}</td>{cells}</tr>'
