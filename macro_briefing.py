@@ -6,39 +6,6 @@ from json_repair import repair_json
 
 # ── 1. 데이터 수집 ───────────────────────────────────────────────────────
 
-def get_market_data():
-    tickers = {
-        'WTI유': 'CL=F', 'Brent유': 'BZ=F', '금': 'GC=F',
-        'S&P500': '^GSPC', '나스닥': '^IXIC', '다우': '^DJI',
-        'VIX': '^VIX', '미국10Y금리': '^TNX',
-        '달러인덱스': 'DX-Y.NYB', 'USD/KRW': 'KRW=X',
-        'KOSPI': '^KS11', 'SOX(반도체)': '^SOX',
-    }
-    results = {}
-    for name, ticker in tickers.items():
-        try:
-            hist = yf.Ticker(ticker).history(period='5d')
-            if len(hist) >= 2:
-                cur, prv = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
-                chg = (cur - prv) / prv * 100
-                results[name] = {'value': f"{cur:,.2f}", 'change': chg}
-            elif len(hist) == 1:
-                results[name] = {'value': f"{hist['Close'].iloc[-1]:,.2f}", 'change': 0}
-            else:
-                results[name] = {'value': 'N/A', 'change': 0}
-        except:
-            results[name] = {'value': '오류', 'change': 0}
-    return results
-
-def get_fear_greed():
-    try:
-        d = requests.get('https://api.alternative.me/fng/', timeout=10).json()['data'][0]
-        return {'value': d['value'], 'label': d['value_classification']}
-    except:
-        return {'value': '50', 'label': 'Neutral'}
-
-# ── 2. Claude API 리포트 생성 ────────────────────────────────────────────
-
 def generate_report(market_data, fear_greed):
     client = anthropic.Anthropic(api_key=os.environ['ANTHROPIC_API_KEY'])
     today = datetime.now().strftime('%Y년 %m월 %d일')
@@ -47,46 +14,48 @@ def generate_report(market_data, fear_greed):
         for k, v in market_data.items()
     ])
 
-    # ── 1단계: 웹검색 뉴스 수집 ──────────────────────────────────
-    print("   웹검색 중...")
-    news_response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=800,
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{"role": "user", "content": f"{today} 글로벌 금융시장 주요뉴스 5가지 각 1줄 요약. 한국어."}]
-    )
-    news_text = "".join(b.text for b in news_response.content if hasattr(b, 'text'))
-    news_text = news_text[:400]
-    print(f"   뉴스 수집 완료. 65초 대기 중...")
-    time.sleep(65)
+    system = """당신은 매크로 애널리스트입니다. 웹검색으로 오늘 뉴스를 확인한 뒤, 반드시 순수 JSON만 출력하세요.
+규칙: 코드블록 없음, 명사형 종결, 각 문자열 50자 이내, 특수문자 사용 금지."""
 
-    # ── 2단계: JSON 리포트 생성 ───────────────────────────────────
-    print("   리포트 생성 중...")
-    prompt = f"""매크로 리포트 JSON 작성. 규칙: 순수JSON만, 코드블록없음, 명사형종결, 50자이내.
+    user = f"""오늘({today}) 글로벌 금융시장 주요 뉴스를 검색한 뒤, 아래 데이터를 참고해 JSON을 작성하세요.
 
-데이터: {market_str}
+시장데이터: {market_str}
 FNG: {fear_greed['value']}/100
-뉴스: {news_text}
-날짜: {today}
 
-JSON구조(각항목실제내용으로채울것):
-report_date,
-section1_issues(5개: title+detail),
-section2_chains(4개: name+steps배열+insight),
-section3_sectors(benefit5개+damage5개: name+reason),
-section4_companies(benefit5개+damage5개: type+logic),
-section5_sentiment(overall+fng_value+indicators6개+contrarian_comment+scenarios3개),
-section6_matrix(issues5개+compound_effects3개+kr_investor_points3개)
+출력할 JSON 키: report_date, section1_issues(5개:title+detail), section2_chains(4개:name+steps+insight), section3_sectors(benefit+damage 각5개:name+reason), section4_companies(benefit+damage 각5개:type+logic), section5_sentiment(overall+fng_value+indicators6개+contrarian_comment+scenarios3개), section6_matrix(issues5개+compound_effects3개+kr_investor_points3개)
 
-지금 {{ 로 시작하는 JSON만 출력:"""
+{{ 로 시작하는 JSON만 출력:"""
 
-    report_response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=3000,
-        messages=[{"role": "user", "content": prompt}]
-    )
+    messages = [{"role": "user", "content": user}]
+    tools = [{"type": "web_search_20250305", "name": "web_search"}]
 
-    text = "".join(b.text for b in report_response.content if hasattr(b, 'text')).strip()
+    print("   Claude API 호출 (웹검색 + 리포트 생성)...")
+    while True:
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=3000,
+            system=system,
+            tools=tools,
+            messages=messages
+        )
+        messages.append({"role": "assistant", "content": response.content})
+
+        if response.stop_reason == "end_turn":
+            break
+        elif response.stop_reason == "tool_use":
+            tool_results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": "검색 완료"
+                    })
+            messages.append({"role": "user", "content": tool_results})
+        else:
+            break
+
+    text = "".join(b.text for b in response.content if hasattr(b, 'text')).strip()
     start = text.find('{')
     end = text.rfind('}')
     if start != -1 and end != -1:
@@ -96,7 +65,7 @@ section6_matrix(issues5개+compound_effects3개+kr_investor_points3개)
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
-        print(f"JSON 오류 발생, 자동 복구 시도 중... ({e})")
+        print(f"JSON 오류, 자동복구 시도... ({e})")
         repaired = repair_json(text)
         return json.loads(repaired)
 
