@@ -1,4 +1,4 @@
-import os, json, requests
+import os, json, re, requests
 import yfinance as yf
 from datetime import datetime
 import anthropic
@@ -7,9 +7,9 @@ import anthropic
 
 def get_market_data():
     tickers = {
-        'WTI유': 'CL=F', 'Brent유': 'BZ=F', '금': 'GC=F',
+        'WTI': 'CL=F', 'Brent': 'BZ=F', 'GOLD': 'GC=F',
         'S&P500': '^GSPC', '나스닥': '^IXIC', '다우': '^DJI',
-        'VIX': '^VIX', '미국10Y금리': '^TNX',
+        'VIX': '^VIX', '미국10Y': '^TNX',
         '달러인덱스': 'DX-Y.NYB', 'USD/KRW': 'KRW=X',
         'KOSPI': '^KS11', 'SOX(반도체)': '^SOX',
     }
@@ -39,7 +39,6 @@ def get_fear_greed():
 # ── 2. Claude API 리포트 생성 ────────────────────────────────────────────
 
 def generate_report(market_data, fear_greed):
-    import re
     client = anthropic.Anthropic(api_key=os.environ['ANTHROPIC_API_KEY'])
     today = datetime.now().strftime('%Y년 %m월 %d일')
     market_str = "\n".join([
@@ -51,136 +50,54 @@ def generate_report(market_data, fear_greed):
     print("   웹검색 중...")
     news_response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=2000,
+        max_tokens=1000,
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{"role": "user", "content": f"""오늘({today}) 글로벌 금융시장 주요 뉴스를 검색 후 항목별 2줄 요약. 한국어로.
-1. 미국 연준 금리 동향
-2. 지정학 리스크 (중동/미중)
-3. 유가/에너지 동향
-4. 미국 경제지표
-5. 한국 증시 영향 이벤트"""}]
+        messages=[{"role": "user", "content": f"오늘({today}) 글로벌 금융시장 주요 뉴스 5가지를 검색해서 각 2줄씩 한국어로 요약해줘. 연준, 유가, 지정학, 경제지표, 한국증시 순서로."}]
     )
     news_text = "".join(b.text for b in news_response.content if hasattr(b, 'text'))
+    news_text = news_text[:600]
     print(f"   뉴스 수집 완료 ({len(news_text)}자)")
 
     # ── 2단계: JSON 리포트 생성 ───────────────────────────────────
     print("   리포트 생성 중...")
+    prompt = f"""다음 데이터로 매크로 리포트 JSON을 작성하라.
 
-    report_response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4000,
-        messages=[{"role": "user", "content": f"""시장 데이터와 뉴스를 바탕으로 매크로 리포트 JSON을 작성하라.
-
-시장 데이터:
+시장데이터:
 {market_str}
-Fear & Greed: {fear_greed['value']}/100 ({fear_greed['label']})
+Fear&Greed: {fear_greed['value']}/100 ({fear_greed['label']})
 
-뉴스:
+오늘뉴스:
 {news_text}
 
 규칙:
-- 순수 JSON만 출력. 앞뒤 텍스트 없음. 코드블록 없음
-- 모든 문자열값은 큰따옴표 사용 금지 내부에서. 대신 작은따옴표도 사용 금지. 따옴표 불필요한 표현으로 대체
-- 문장은 명사형으로 끝낼 것. 예: ~상승, ~둔화, ~확대, ~우려, ~수혜
-- 각 문자열은 50자 이내로 간결하게
-- 줄바꿈 없이 한 줄로
+- 순수 JSON만 출력. 앞뒤 설명 없음. 코드블록 없음
+- 모든 문장은 명사형 종결 (예: ~상승, ~확대, ~우려, ~수혜)
+- 각 문자열 50자 이내
+- 특수문자 사용 금지 (따옴표, 슬래시 등)
 
-다음 JSON을 출력하라:
-{{
-  "report_date": "{today}",
-  "section1_issues": [
-    {{"title": "이슈제목", "detail": "50자이내 명사형 설명"}},
-    {{"title": "이슈제목", "detail": "50자이내 명사형 설명"}},
-    {{"title": "이슈제목", "detail": "50자이내 명사형 설명"}},
-    {{"title": "이슈제목", "detail": "50자이내 명사형 설명"}},
-    {{"title": "이슈제목", "detail": "50자이내 명사형 설명"}}
-  ],
-  "section2_chains": [
-    {{"name": "체인A 제목", "steps": ["원인1", "결과1", "결과2", "최종결과"], "insight": "핵심연결고리 30자이내"}},
-    {{"name": "체인B 제목", "steps": ["원인1", "결과1", "결과2", "최종결과"], "insight": "핵심연결고리 30자이내"}},
-    {{"name": "체인C 제목", "steps": ["원인1", "결과1", "결과2", "최종결과"], "insight": "핵심연결고리 30자이내"}},
-    {{"name": "체인D 제목", "steps": ["원인1", "결과1", "결과2", "최종결과"], "insight": "핵심연결고리 30자이내"}}
-  ],
-  "section3_sectors": {{
-    "benefit": [
-      {{"name": "섹터명", "reason": "30자이내 근거"}},
-      {{"name": "섹터명", "reason": "30자이내 근거"}},
-      {{"name": "섹터명", "reason": "30자이내 근거"}},
-      {{"name": "섹터명", "reason": "30자이내 근거"}},
-      {{"name": "섹터명", "reason": "30자이내 근거"}}
-    ],
-    "damage": [
-      {{"name": "섹터명", "reason": "30자이내 근거"}},
-      {{"name": "섹터명", "reason": "30자이내 근거"}},
-      {{"name": "섹터명", "reason": "30자이내 근거"}},
-      {{"name": "섹터명", "reason": "30자이내 근거"}},
-      {{"name": "섹터명", "reason": "30자이내 근거"}}
-    ]
-  }},
-  "section4_companies": {{
-    "benefit": [
-      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
-      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
-      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
-      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
-      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}}
-    ],
-    "damage": [
-      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
-      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
-      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
-      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
-      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}}
-    ]
-  }},
-  "section5_sentiment": {{
-    "overall": "종합판정",
-    "fng_value": "{fear_greed['value']}",
-    "indicators": [
-      {{"name": "Fear and Greed", "value": "{fear_greed['value']}/100", "level": "수준", "signal": "20자이내시그널"}},
-      {{"name": "VIX", "value": "추정값", "level": "수준", "signal": "20자이내시그널"}},
-      {{"name": "풋콜비율", "value": "값/100", "level": "수준", "signal": "20자이내시그널"}},
-      {{"name": "주가강도", "value": "값/100", "level": "수준", "signal": "20자이내시그널"}},
-      {{"name": "주가폭", "value": "값/100", "level": "수준", "signal": "20자이내시그널"}},
-      {{"name": "안전자산수요", "value": "값/100", "level": "수준", "signal": "20자이내시그널"}}
-    ],
-    "contrarian_comment": "역발상분석 60자이내 명사형",
-    "scenarios": [
-      {{"name": "낙관 시나리오", "content": "40자이내 명사형"}},
-      {{"name": "비관 시나리오", "content": "40자이내 명사형"}},
-      {{"name": "기본 시나리오", "content": "40자이내 명사형"}}
-    ]
-  }},
-  "section6_matrix": {{
-    "issues": ["①이슈1", "②이슈2", "③이슈3", "④이슈4", "⑤이슈5"],
-    "compound_effects": [
-      {{"title": "복합효과제목", "content": "50자이내 명사형"}},
-      {{"title": "복합효과제목", "content": "50자이내 명사형"}},
-      {{"title": "복합효과제목", "content": "50자이내 명사형"}}
-    ],
-    "kr_investor_points": ["30자이내 포인트1", "30자이내 포인트2", "30자이내 포인트3"]
-  }}
-}}"""}]
+다음 형식으로 출력:
+{{"report_date":"{today}","section1_issues":[{{"title":"제목","detail":"설명"}},{{"title":"제목","detail":"설명"}},{{"title":"제목","detail":"설명"}},{{"title":"제목","detail":"설명"}},{{"title":"제목","detail":"설명"}}],"section2_chains":[{{"name":"체인A 제목","steps":["단계1","단계2","단계3","단계4"],"insight":"핵심연결고리"}},{{"name":"체인B 제목","steps":["단계1","단계2","단계3","단계4"],"insight":"핵심연결고리"}},{{"name":"체인C 제목","steps":["단계1","단계2","단계3","단계4"],"insight":"핵심연결고리"}},{{"name":"체인D 제목","steps":["단계1","단계2","단계3","단계4"],"insight":"핵심연결고리"}}],"section3_sectors":{{"benefit":[{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}}],"damage":[{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}}]}},"section4_companies":{{"benefit":[{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}}],"damage":[{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}}]}},"section5_sentiment":{{"overall":"종합판정","fng_value":"{fear_greed['value']}","indicators":[{{"name":"Fear and Greed","value":"{fear_greed['value']}/100","level":"수준","signal":"시그널"}},{{"name":"VIX","value":"추정값","level":"수준","signal":"시그널"}},{{"name":"풋콜비율","value":"값/100","level":"수준","signal":"시그널"}},{{"name":"주가강도","value":"값/100","level":"수준","signal":"시그널"}},{{"name":"주가폭","value":"값/100","level":"수준","signal":"시그널"}},{{"name":"안전자산수요","value":"값/100","level":"수준","signal":"시그널"}}],"contrarian_comment":"역발상분석 내용","scenarios":[{{"name":"낙관 시나리오","content":"내용"}},{{"name":"비관 시나리오","content":"내용"}},{{"name":"기본 시나리오","content":"내용"}}]}},"section6_matrix":{{"issues":["①이슈1","②이슈2","③이슈3","④이슈4","⑤이슈5"],"compound_effects":[{{"title":"복합효과1","content":"내용"}},{{"title":"복합효과2","content":"내용"}},{{"title":"복합효과3","content":"내용"}}],"kr_investor_points":["포인트1","포인트2","포인트3"]}}}}"""
+
+    report_response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=3000,
+        messages=[{"role": "user", "content": prompt}]
     )
 
     text = "".join(b.text for b in report_response.content if hasattr(b, 'text')).strip()
-
-    # JSON 추출
     start = text.find('{')
     end = text.rfind('}')
     if start != -1 and end != -1:
         text = text[start:end+1]
-
-    # 안전한 파싱: 제어문자 제거
     text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)
 
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
-        print(f"JSON 파싱 오류: {e}")
-        print(f"문제 위치 주변:\n{text[max(0,e.pos-100):e.pos+100]}")
+        print(f"JSON 오류: {e}")
+        print(f"문제 위치: {text[max(0,e.pos-100):e.pos+100]}")
         raise
-        
+
 # ── 3. 공통 CSS ──────────────────────────────────────────────────────────
 
 BASE_CSS = """
@@ -207,7 +124,6 @@ body {
 .badge { display:inline-block; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; }
 .bg   { background:#122820; color:#3fb950; border:1px solid #238636; }
 .br   { background:#2d1214; color:#f85149; border:1px solid #da3633; }
-.bb   { background:#0d2044; color:#58a6ff; border:1px solid #388bfd; }
 .g    { color:#3fb950; } .r { color:#f85149; } .y { color:#e3b341; } .b { color:#58a6ff; }
 table { width:100%; border-collapse:collapse; }
 th { font-size:11px; font-weight:700; color:#58a6ff; letter-spacing:1px; padding:8px 12px; text-align:left; border-bottom:1px solid #21262d; }
@@ -226,15 +142,15 @@ def hdr(title, date):
 # ── 4. 섹션별 HTML ───────────────────────────────────────────────────────
 
 def html_s1(d, mkt, fg):
-    # 상단 시장 스냅샷
     keys = ['WTI유', 'S&P500', 'VIX', 'USD/KRW', 'KOSPI', '금']
     snap = ""
     for k in keys:
         if k in mkt:
             c = mkt[k]['change']
             cls = 'g' if c >= 0 else 'r'
-            snap += f'<span style="margin-right:22px"><span style="color:#484f58;font-size:11px">{k} </span><span class="{cls}" style="font-size:13px;font-weight:600">{mkt[k]["value"]}</span><span style="font-size:11px;color:#484f58"> ({"+"}{ c:.1f}%)</span></span>'
-    fv = int(fg['value']) if fg['value'].isdigit() else 50
+            sign = '+' if c >= 0 else ''
+            snap += f'<span style="margin-right:22px"><span style="color:#484f58;font-size:11px">{k} </span><span class="{cls}" style="font-size:13px;font-weight:600">{mkt[k]["value"]}</span><span style="font-size:11px;color:#484f58"> ({sign}{c:.1f}%)</span></span>'
+    fv = int(fg['value']) if str(fg['value']).isdigit() else 50
     fg_cls = 'r' if fv < 25 else 'y' if fv < 50 else 'g'
     snap += f'<span><span style="color:#484f58;font-size:11px">F&G </span><span class="{fg_cls}" style="font-size:13px;font-weight:600">{fg["value"]}/100</span></span>'
 
@@ -281,18 +197,18 @@ def html_s3(d):
 </body></html>"""
 
 def html_s4(d):
-    def rows(items, emoji, cls, k1, k2):
-        return "".join([f'<tr><td style="font-size:12px"><span class="{cls}">{emoji}</span> {it[k1]}</td><td class="card-body">{it[k2]}</td></tr>' for it in items])
+    def rows(items, emoji, cls):
+        return "".join([f'<tr><td style="font-size:12px"><span class="{cls}">{emoji}</span> {it["type"]}</td><td class="card-body">{it["logic"]}</td></tr>' for it in items])
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
 {hdr("🏢 수혜 / 피해 기업 유형", d['report_date'])}
 <div class="tag">Company Type Impact</div>
 <div class="card" style="margin-bottom:16px">
   <div style="margin-bottom:12px"><span class="badge bg">수혜 기업</span></div>
-  <table><tr><th>기업 유형</th><th>투자 논리</th></tr>{rows(d['section4_companies']['benefit'],'🟢','g','type','logic')}</table>
+  <table><tr><th>기업 유형</th><th>투자 논리</th></tr>{rows(d['section4_companies']['benefit'],'🟢','g')}</table>
 </div>
 <div class="card">
   <div style="margin-bottom:12px"><span class="badge br">피해 기업</span></div>
-  <table><tr><th>기업 유형</th><th>피해 논리</th></tr>{rows(d['section4_companies']['damage'],'🔴','r','type','logic')}</table>
+  <table><tr><th>기업 유형</th><th>피해 논리</th></tr>{rows(d['section4_companies']['damage'],'🔴','r')}</table>
 </div>
 <div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다.</div>
 </body></html>"""
@@ -301,7 +217,6 @@ def html_s5(d):
     s = d['section5_sentiment']
     fv = int(s['fng_value']) if str(s['fng_value']).isdigit() else 50
     fg_cls = 'r' if fv < 25 else 'y' if fv < 50 else 'g'
-
     inds = "".join([
         f'<tr><td>{ind["name"]}</td><td class="y">{ind["value"]}</td>'
         f'<td style="font-size:12px;color:#8b949e">{ind["level"]}</td>'
@@ -336,8 +251,6 @@ def html_s5(d):
 def html_s6(d):
     s = d['section6_matrix']
     issues = s['issues']
-
-    # 5×5 매트릭스 (간략 표기)
     short = [iss[:7] for iss in issues]
     symbols = [['—','▲강화','▲강화','▲강화','▲강화'],
                ['▲강화','—','▲강화','▲강화','▲강화'],
@@ -349,7 +262,7 @@ def html_s6(d):
     for i, row in enumerate(symbols):
         cells = "".join([
             f'<td style="font-size:11px;text-align:center;color:#484f58">—</td>' if cell == '—'
-            else f'<td style="font-size:11px;text-align:center;color:{"#3fb950" if "강화" in cell or "추가" in cell else "#f85149" if "완화" in cell or "압력" in cell or "위축" in cell or "악화" in cell else "#e3b341"}">{cell}</td>'
+            else f'<td style="font-size:11px;text-align:center;color:{"#3fb950" if "강화" in cell or "추가" in cell else "#f85149"}"> {cell}</td>'
             for cell in row
         ])
         matrix_rows += f'<tr><td style="font-size:11px;color:#58a6ff;font-weight:600">{short[i]}</td>{cells}</tr>'
@@ -358,9 +271,10 @@ def html_s6(d):
         f'<div class="card"><div class="card-title">{"①②③"[i]} {ef["title"]}</div><div class="card-body">{ef["content"]}</div></div>'
         for i, ef in enumerate(s['compound_effects'][:3])
     ])
-
-    kr_pts = "".join([f'<div style="margin-bottom:7px;font-size:12.5px"><span class="b">▸</span> <span class="card-body">{pt}</span></div>' for pt in s.get('kr_investor_points', [])])
-
+    kr_pts = "".join([
+        f'<div style="margin-bottom:7px;font-size:12.5px"><span class="b">▸</span> <span class="card-body">{pt}</span></div>'
+        for pt in s.get('kr_investor_points', [])
+    ])
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
 {hdr("⚡ 크로스 임팩트 매트릭스", d['report_date'])}
 <div class="tag">Cross-Impact Matrix</div>
@@ -376,7 +290,7 @@ def html_s6(d):
 <div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다. 투자 판단의 최종 책임은 투자자 본인에게 있습니다.</div>
 </body></html>"""
 
-# ── 5. HTML → PNG / PDF (Playwright) ────────────────────────────────────
+# ── 5. HTML → PNG / PDF ──────────────────────────────────────────────────
 
 def html_to_png(html, path):
     from playwright.sync_api import sync_playwright
@@ -391,19 +305,18 @@ def html_to_png(html, path):
 
 def html_to_pdf(sections_html, path):
     from playwright.sync_api import sync_playwright
-    combined = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+    combined = """<!DOCTYPE html><html><head><meta charset="UTF-8">
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
-      * {{ margin:0; padding:0; box-sizing:border-box; }}
-      body {{ font-family:'Noto Sans KR',sans-serif; background:#0d1117; color:#e6edf3; }}
-      .pg {{ page-break-after:always; padding:40px 48px; }}
-      .pg:last-child {{ page-break-after:avoid; }}
+      * { margin:0; padding:0; box-sizing:border-box; }
+      body { font-family:'Noto Sans KR',sans-serif; background:#0d1117; color:#e6edf3; }
+      .pg { page-break-after:always; padding:40px 48px; }
+      .pg:last-child { page-break-after:avoid; }
     </style></head><body>"""
     for html in sections_html:
         body = html[html.find('<body>')+6 : html.find('</body>')]
         combined += f'<div class="pg">{body}</div>'
     combined += "</body></html>"
-
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()
