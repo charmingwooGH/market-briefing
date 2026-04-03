@@ -39,44 +39,46 @@ def get_fear_greed():
 # ── 2. Claude API 리포트 생성 ────────────────────────────────────────────
 
 def generate_report(market_data, fear_greed):
+    import re, time
     client = anthropic.Anthropic(api_key=os.environ['ANTHROPIC_API_KEY'])
     today = datetime.now().strftime('%Y년 %m월 %d일')
     market_str = "\n".join([
-        f"- {k}: {v['value']} ({'+' if v['change'] >= 0 else ''}{v['change']:.2f}%)"
+        f"{k}: {v['value']} ({'+' if v['change'] >= 0 else ''}{v['change']:.2f}%)"
         for k, v in market_data.items()
     ])
 
-    # ── 1단계: 웹검색으로 뉴스 수집 ──────────────────────────────
+    # ── 1단계: 웹검색 뉴스 수집 ──────────────────────────────────
     print("   웹검색 중...")
     news_response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=1000,
+        max_tokens=800,
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{"role": "user", "content": f"오늘({today}) 글로벌 금융시장 주요 뉴스 5가지를 검색해서 각 2줄씩 한국어로 요약해줘. 연준, 유가, 지정학, 경제지표, 한국증시 순서로."}]
+        messages=[{"role": "user", "content": f"{today} 글로벌 금융시장 주요뉴스 5가지 각 1줄 요약. 한국어."}]
     )
     news_text = "".join(b.text for b in news_response.content if hasattr(b, 'text'))
-    news_text = news_text[:600]
-    print(f"   뉴스 수집 완료 ({len(news_text)}자)")
+    news_text = news_text[:400]
+    print(f"   뉴스 수집 완료. 60초 대기 중...")
+    time.sleep(65)  # rate limit 초기화 대기
 
     # ── 2단계: JSON 리포트 생성 ───────────────────────────────────
     print("   리포트 생성 중...")
-    prompt = f"""다음 데이터로 매크로 리포트 JSON을 작성하라.
+    prompt = f"""매크로 리포트 JSON 작성. 규칙: 순수JSON만, 코드블록없음, 명사형종결, 50자이내.
 
-시장데이터:
-{market_str}
-Fear&Greed: {fear_greed['value']}/100 ({fear_greed['label']})
+데이터: {market_str}
+FNG: {fear_greed['value']}/100
+뉴스: {news_text}
+날짜: {today}
 
-오늘뉴스:
-{news_text}
+JSON구조(각항목실제내용으로채울것):
+report_date, 
+section1_issues(5개: title+detail),
+section2_chains(4개: name+steps배열+insight),
+section3_sectors(benefit5개+damage5개: name+reason),
+section4_companies(benefit5개+damage5개: type+logic),
+section5_sentiment(overall+fng_value+indicators6개+contrarian_comment+scenarios3개),
+section6_matrix(issues5개+compound_effects3개+kr_investor_points3개)
 
-규칙:
-- 순수 JSON만 출력. 앞뒤 설명 없음. 코드블록 없음
-- 모든 문장은 명사형 종결 (예: ~상승, ~확대, ~우려, ~수혜)
-- 각 문자열 50자 이내
-- 특수문자 사용 금지 (따옴표, 슬래시 등)
-
-다음 형식으로 출력:
-{{"report_date":"{today}","section1_issues":[{{"title":"제목","detail":"설명"}},{{"title":"제목","detail":"설명"}},{{"title":"제목","detail":"설명"}},{{"title":"제목","detail":"설명"}},{{"title":"제목","detail":"설명"}}],"section2_chains":[{{"name":"체인A 제목","steps":["단계1","단계2","단계3","단계4"],"insight":"핵심연결고리"}},{{"name":"체인B 제목","steps":["단계1","단계2","단계3","단계4"],"insight":"핵심연결고리"}},{{"name":"체인C 제목","steps":["단계1","단계2","단계3","단계4"],"insight":"핵심연결고리"}},{{"name":"체인D 제목","steps":["단계1","단계2","단계3","단계4"],"insight":"핵심연결고리"}}],"section3_sectors":{{"benefit":[{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}}],"damage":[{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}},{{"name":"섹터","reason":"근거"}}]}},"section4_companies":{{"benefit":[{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}}],"damage":[{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}},{{"type":"기업유형","logic":"논리"}}]}},"section5_sentiment":{{"overall":"종합판정","fng_value":"{fear_greed['value']}","indicators":[{{"name":"Fear and Greed","value":"{fear_greed['value']}/100","level":"수준","signal":"시그널"}},{{"name":"VIX","value":"추정값","level":"수준","signal":"시그널"}},{{"name":"풋콜비율","value":"값/100","level":"수준","signal":"시그널"}},{{"name":"주가강도","value":"값/100","level":"수준","signal":"시그널"}},{{"name":"주가폭","value":"값/100","level":"수준","signal":"시그널"}},{{"name":"안전자산수요","value":"값/100","level":"수준","signal":"시그널"}}],"contrarian_comment":"역발상분석 내용","scenarios":[{{"name":"낙관 시나리오","content":"내용"}},{{"name":"비관 시나리오","content":"내용"}},{{"name":"기본 시나리오","content":"내용"}}]}},"section6_matrix":{{"issues":["①이슈1","②이슈2","③이슈3","④이슈4","⑤이슈5"],"compound_effects":[{{"title":"복합효과1","content":"내용"}},{{"title":"복합효과2","content":"내용"}},{{"title":"복합효과3","content":"내용"}}],"kr_investor_points":["포인트1","포인트2","포인트3"]}}}}"""
+지금 {{ 로 시작하는 JSON만 출력:"""
 
     report_response = client.messages.create(
         model="claude-sonnet-4-6",
@@ -95,7 +97,7 @@ Fear&Greed: {fear_greed['value']}/100 ({fear_greed['label']})
         return json.loads(text)
     except json.JSONDecodeError as e:
         print(f"JSON 오류: {e}")
-        print(f"문제 위치: {text[max(0,e.pos-100):e.pos+100]}")
+        print(f"문제위치: {text[max(0,e.pos-150):e.pos+150]}")
         raise
 
 # ── 3. 공통 CSS ──────────────────────────────────────────────────────────
