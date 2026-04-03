@@ -39,6 +39,7 @@ def get_fear_greed():
 # ── 2. Claude API 리포트 생성 ────────────────────────────────────────────
 
 def generate_report(market_data, fear_greed):
+    import re
     client = anthropic.Anthropic(api_key=os.environ['ANTHROPIC_API_KEY'])
     today = datetime.now().strftime('%Y년 %m월 %d일')
     market_str = "\n".join([
@@ -50,92 +51,119 @@ def generate_report(market_data, fear_greed):
     print("   웹검색 중...")
     news_response = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=3000,
+        max_tokens=2000,
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{"role": "user", "content": f"""오늘({today}) 글로벌 금융시장에 영향을 미치는 주요 매크로 뉴스를 검색해서 요약해주세요.
-다음 항목을 검색하세요:
-1. 미국 연준(Fed) 금리 관련 최신 뉴스
-2. 글로벌 지정학 리스크 (중동, 미중 무역 등)
-3. 유가/에너지 시장 동향
-4. 미국 경제지표 발표 (CPI, PPI, 고용 등)
-5. 한국 증시에 영향을 미칠 오늘의 주요 이벤트
-
-검색 후 각 항목별로 2~3줄로 요약해주세요. 한국어로 답변하세요."""}]
+        messages=[{"role": "user", "content": f"""오늘({today}) 글로벌 금융시장 주요 뉴스를 검색 후 항목별 2줄 요약. 한국어로.
+1. 미국 연준 금리 동향
+2. 지정학 리스크 (중동/미중)
+3. 유가/에너지 동향
+4. 미국 경제지표
+5. 한국 증시 영향 이벤트"""}]
     )
-
-    news_text = ""
-    for block in news_response.content:
-        if hasattr(block, 'text'):
-            news_text += block.text
+    news_text = "".join(b.text for b in news_response.content if hasattr(b, 'text'))
     print(f"   뉴스 수집 완료 ({len(news_text)}자)")
 
-    # ── 2단계: JSON 리포트 생성 (웹검색 없이) ────────────────────
+    # ── 2단계: JSON 리포트 생성 ───────────────────────────────────
     print("   리포트 생성 중...")
-
-    schema = '''{
-  "report_date": "날짜",
-  "section1_issues": [{"title": "이슈 제목", "detail": "설명"}],
-  "section2_chains": [{"name": "체인명", "steps": ["단계1", "단계2", "단계3"], "insight": "핵심"}],
-  "section3_sectors": {
-    "benefit": [{"name": "섹터명", "reason": "근거"}],
-    "damage": [{"name": "섹터명", "reason": "근거"}]
-  },
-  "section4_companies": {
-    "benefit": [{"type": "기업유형", "logic": "논리"}],
-    "damage": [{"type": "기업유형", "logic": "논리"}]
-  },
-  "section5_sentiment": {
-    "overall": "종합판정",
-    "fng_value": "숫자",
-    "indicators": [{"name": "지표명", "value": "값", "level": "수준", "signal": "시그널"}],
-    "contrarian_comment": "역발상 분석",
-    "scenarios": [{"name": "시나리오A", "content": "내용"}, {"name": "시나리오B", "content": "내용"}, {"name": "기본시나리오", "content": "내용"}]
-  },
-  "section6_matrix": {
-    "issues": ["①이슈1", "②이슈2", "③이슈3", "④이슈4", "⑤이슈5"],
-    "compound_effects": [{"title": "제목", "content": "내용"}],
-    "kr_investor_points": ["포인트1", "포인트2", "포인트3"]
-  }
-}'''
 
     report_response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=4000,
-        messages=[{"role": "user", "content": f"""아래 시장 데이터와 뉴스를 바탕으로 매크로 리포트를 JSON으로 작성하세요.
+        messages=[{"role": "user", "content": f"""시장 데이터와 뉴스를 바탕으로 매크로 리포트 JSON을 작성하라.
 
-## 시장 데이터:
+시장 데이터:
 {market_str}
-Fear & Greed Index: {fear_greed['value']}/100 ({fear_greed['label']})
+Fear & Greed: {fear_greed['value']}/100 ({fear_greed['label']})
 
-## 오늘의 주요 뉴스:
+뉴스:
 {news_text}
 
-## 출력 규칙:
-- 반드시 순수 JSON만 출력 (앞뒤 설명 없이)
-- 코드블록(```) 사용 금지
-- 모든 문자열에서 큰따옴표 내부에 큰따옴표 사용 금지
-- 줄바꿈 문자(\\n) 사용 금지, 문장은 한 줄로 작성
-- 아래 스키마를 정확히 따를 것
+규칙:
+- 순수 JSON만 출력. 앞뒤 텍스트 없음. 코드블록 없음
+- 모든 문자열값은 큰따옴표 사용 금지 내부에서. 대신 작은따옴표도 사용 금지. 따옴표 불필요한 표현으로 대체
+- 문장은 명사형으로 끝낼 것. 예: ~상승, ~둔화, ~확대, ~우려, ~수혜
+- 각 문자열은 50자 이내로 간결하게
+- 줄바꿈 없이 한 줄로
 
-## 스키마:
-{schema}
-
-## 개수 기준:
-- section1_issues: 5개
-- section2_chains: 4개
-- section3_sectors benefit/damage: 각 5개
-- section4_companies benefit/damage: 각 5개
-- section5_sentiment indicators: 6개
-- section6_matrix compound_effects: 3개, kr_investor_points: 3개
-
-지금 바로 {{ 로 시작하는 JSON을 출력하세요:"""}]
+다음 JSON을 출력하라:
+{{
+  "report_date": "{today}",
+  "section1_issues": [
+    {{"title": "이슈제목", "detail": "50자이내 명사형 설명"}},
+    {{"title": "이슈제목", "detail": "50자이내 명사형 설명"}},
+    {{"title": "이슈제목", "detail": "50자이내 명사형 설명"}},
+    {{"title": "이슈제목", "detail": "50자이내 명사형 설명"}},
+    {{"title": "이슈제목", "detail": "50자이내 명사형 설명"}}
+  ],
+  "section2_chains": [
+    {{"name": "체인A 제목", "steps": ["원인1", "결과1", "결과2", "최종결과"], "insight": "핵심연결고리 30자이내"}},
+    {{"name": "체인B 제목", "steps": ["원인1", "결과1", "결과2", "최종결과"], "insight": "핵심연결고리 30자이내"}},
+    {{"name": "체인C 제목", "steps": ["원인1", "결과1", "결과2", "최종결과"], "insight": "핵심연결고리 30자이내"}},
+    {{"name": "체인D 제목", "steps": ["원인1", "결과1", "결과2", "최종결과"], "insight": "핵심연결고리 30자이내"}}
+  ],
+  "section3_sectors": {{
+    "benefit": [
+      {{"name": "섹터명", "reason": "30자이내 근거"}},
+      {{"name": "섹터명", "reason": "30자이내 근거"}},
+      {{"name": "섹터명", "reason": "30자이내 근거"}},
+      {{"name": "섹터명", "reason": "30자이내 근거"}},
+      {{"name": "섹터명", "reason": "30자이내 근거"}}
+    ],
+    "damage": [
+      {{"name": "섹터명", "reason": "30자이내 근거"}},
+      {{"name": "섹터명", "reason": "30자이내 근거"}},
+      {{"name": "섹터명", "reason": "30자이내 근거"}},
+      {{"name": "섹터명", "reason": "30자이내 근거"}},
+      {{"name": "섹터명", "reason": "30자이내 근거"}}
+    ]
+  }},
+  "section4_companies": {{
+    "benefit": [
+      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
+      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
+      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
+      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
+      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}}
+    ],
+    "damage": [
+      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
+      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
+      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
+      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}},
+      {{"type": "기업유형 20자이내", "logic": "30자이내 논리"}}
+    ]
+  }},
+  "section5_sentiment": {{
+    "overall": "종합판정",
+    "fng_value": "{fear_greed['value']}",
+    "indicators": [
+      {{"name": "Fear and Greed", "value": "{fear_greed['value']}/100", "level": "수준", "signal": "20자이내시그널"}},
+      {{"name": "VIX", "value": "추정값", "level": "수준", "signal": "20자이내시그널"}},
+      {{"name": "풋콜비율", "value": "값/100", "level": "수준", "signal": "20자이내시그널"}},
+      {{"name": "주가강도", "value": "값/100", "level": "수준", "signal": "20자이내시그널"}},
+      {{"name": "주가폭", "value": "값/100", "level": "수준", "signal": "20자이내시그널"}},
+      {{"name": "안전자산수요", "value": "값/100", "level": "수준", "signal": "20자이내시그널"}}
+    ],
+    "contrarian_comment": "역발상분석 60자이내 명사형",
+    "scenarios": [
+      {{"name": "낙관 시나리오", "content": "40자이내 명사형"}},
+      {{"name": "비관 시나리오", "content": "40자이내 명사형"}},
+      {{"name": "기본 시나리오", "content": "40자이내 명사형"}}
+    ]
+  }},
+  "section6_matrix": {{
+    "issues": ["①이슈1", "②이슈2", "③이슈3", "④이슈4", "⑤이슈5"],
+    "compound_effects": [
+      {{"title": "복합효과제목", "content": "50자이내 명사형"}},
+      {{"title": "복합효과제목", "content": "50자이내 명사형"}},
+      {{"title": "복합효과제목", "content": "50자이내 명사형"}}
+    ],
+    "kr_investor_points": ["30자이내 포인트1", "30자이내 포인트2", "30자이내 포인트3"]
+  }}
+}}"""}]
     )
 
-    text = ""
-    for block in report_response.content:
-        if hasattr(block, 'text'):
-            text += block.text
-    text = text.strip()
+    text = "".join(b.text for b in report_response.content if hasattr(b, 'text')).strip()
 
     # JSON 추출
     start = text.find('{')
@@ -143,11 +171,14 @@ Fear & Greed Index: {fear_greed['value']}/100 ({fear_greed['label']})
     if start != -1 and end != -1:
         text = text[start:end+1]
 
+    # 안전한 파싱: 제어문자 제거
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', text)
+
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
         print(f"JSON 파싱 오류: {e}")
-        print(f"응답 텍스트 (첫 500자): {text[:500]}")
+        print(f"문제 위치 주변:\n{text[max(0,e.pos-100):e.pos+100]}")
         raise
         
 # ── 3. 공통 CSS ──────────────────────────────────────────────────────────
