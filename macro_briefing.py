@@ -55,7 +55,7 @@ def generate_report(market_data, fear_greed):
 시장데이터: {market_str}
 FNG: {fear_greed['value']}/100
 
-출력할 JSON 키: report_date, section1_issues(5개:title+detail), section2_chains(4개:name+steps+insight), section3_sectors(benefit+damage 각5개:name+reason), section4_companies(benefit+damage 각5개:type+logic), section5_sentiment(overall+fng_value+indicators6개+contrarian_comment+scenarios3개), section6_matrix(issues5개+compound_effects3개+kr_investor_points3개)
+출력할 JSON 키: report_date, section1_issues(5개:title+detail), section2_chains(4개:name+steps+insight), section3_sectors(benefit+damage 각5개:name+reason), section4_companies(benefit+damage 각5개:type+logic), section5_sentiment(overall+fng_value+indicators6개각각name+value+level+signal+contrarian_comment+scenarios3개각각name+content), section6_matrix(issues5개+compound_effects3개각각title+content+kr_investor_points3개)
 
 {{ 로 시작하는 JSON만 출력:"""
 
@@ -160,24 +160,24 @@ def html_s1(d, mkt, fg):
 
     issues = ""
     circles = "①②③④⑤"
-    for i, iss in enumerate(d['section1_issues']):
-        issues += f'<div class="card"><div class="card-title">{circles[i]} {iss["title"]}</div><div class="card-body">{iss["detail"]}</div></div>'
+    for i, iss in enumerate(d.get('section1_issues', [])):
+        issues += f'<div class="card"><div class="card-title">{circles[i]} {iss.get("title","")}</div><div class="card-body">{iss.get("detail","")}</div></div>'
 
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("📌 핵심 글로벌 이슈", d['report_date'])}
+{hdr("📌 핵심 글로벌 이슈", d.get('report_date',''))}
 <div style="background:#161b22;border:1px solid #21262d;border-radius:8px;padding:12px 18px;margin-bottom:24px;overflow:hidden">{snap}</div>
-<div class="tag">Top Global Issues · {len(d['section1_issues'])}</div>
+<div class="tag">Top Global Issues · {len(d.get('section1_issues',[]))}</div>
 {issues}
 <div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다. 투자 판단의 최종 책임은 투자자 본인에게 있습니다.</div>
 </body></html>"""
 
 def html_s2(d):
     chains = ""
-    for ch in d['section2_chains']:
-        steps = "".join([f'<div class="step"><span class="arr">→</span><span>{s}</span></div>' for s in ch['steps']])
-        chains += f'<div class="card"><div class="card-title">{ch["name"]}</div>{steps}<div class="insight">💡 {ch["insight"]}</div></div>'
+    for ch in d.get('section2_chains', []):
+        steps = "".join([f'<div class="step"><span class="arr">→</span><span>{s}</span></div>' for s in ch.get('steps', [])])
+        chains += f'<div class="card"><div class="card-title">{ch.get("name","")}</div>{steps}<div class="insight">💡 {ch.get("insight","")}</div></div>'
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("🔗 인과관계 체인 분석", d['report_date'])}
+{hdr("🔗 인과관계 체인 분석", d.get('report_date',''))}
 <div class="tag">Causal Chain Analysis</div>
 {chains}
 <div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다.</div>
@@ -185,65 +185,75 @@ def html_s2(d):
 
 def html_s3(d):
     def rows(items, emoji, cls):
-        return "".join([f'<tr><td><span class="{cls}">{emoji} {it["name"]}</span></td><td class="card-body">{it["reason"]}</td></tr>' for it in items])
+        return "".join([
+            f'<tr><td><span class="{cls}">{emoji} {it.get("name","")}</span></td><td class="card-body">{it.get("reason","")}</td></tr>'
+            for it in items
+        ])
+    sec = d.get('section3_sectors', {})
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("🟢 수혜 / 🔴 피해 섹터", d['report_date'])}
+{hdr("🟢 수혜 / 🔴 피해 섹터", d.get('report_date',''))}
 <div class="tag">Sector Impact Analysis</div>
 <div class="card" style="margin-bottom:16px">
   <div style="margin-bottom:12px"><span class="badge bg">수혜 섹터</span></div>
-  <table><tr><th>섹터</th><th>수혜 근거</th></tr>{rows(d['section3_sectors']['benefit'],'🟢','g')}</table>
+  <table><tr><th>섹터</th><th>수혜 근거</th></tr>{rows(sec.get('benefit',[]),'🟢','g')}</table>
 </div>
 <div class="card">
   <div style="margin-bottom:12px"><span class="badge br">피해 섹터</span></div>
-  <table><tr><th>섹터</th><th>피해 근거</th></tr>{rows(d['section3_sectors']['damage'],'🔴','r')}</table>
+  <table><tr><th>섹터</th><th>피해 근거</th></tr>{rows(sec.get('damage',[]),'🔴','r')}</table>
 </div>
 <div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다.</div>
 </body></html>"""
 
 def html_s4(d):
     def rows(items, emoji, cls):
-        return "".join([f'<tr><td style="font-size:12px"><span class="{cls}">{emoji}</span> {it["type"]}</td><td class="card-body">{it["logic"]}</td></tr>' for it in items])
+        return "".join([
+            f'<tr><td style="font-size:12px"><span class="{cls}">{emoji}</span> {it.get("type","")}</td><td class="card-body">{it.get("logic","")}</td></tr>'
+            for it in items
+        ])
+    sec = d.get('section4_companies', {})
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("🏢 수혜 / 피해 기업 유형", d['report_date'])}
+{hdr("🏢 수혜 / 피해 기업 유형", d.get('report_date',''))}
 <div class="tag">Company Type Impact</div>
 <div class="card" style="margin-bottom:16px">
   <div style="margin-bottom:12px"><span class="badge bg">수혜 기업</span></div>
-  <table><tr><th>기업 유형</th><th>투자 논리</th></tr>{rows(d['section4_companies']['benefit'],'🟢','g')}</table>
+  <table><tr><th>기업 유형</th><th>투자 논리</th></tr>{rows(sec.get('benefit',[]),'🟢','g')}</table>
 </div>
 <div class="card">
   <div style="margin-bottom:12px"><span class="badge br">피해 기업</span></div>
-  <table><tr><th>기업 유형</th><th>피해 논리</th></tr>{rows(d['section4_companies']['damage'],'🔴','r')}</table>
+  <table><tr><th>기업 유형</th><th>피해 논리</th></tr>{rows(sec.get('damage',[]),'🔴','r')}</table>
 </div>
 <div class="footer">본 리포트는 AI 기반 분석 시스템에 의해 자동 생성되었습니다.</div>
 </body></html>"""
 
 def html_s5(d):
-    s = d['section5_sentiment']
-    fv = int(s['fng_value']) if str(s['fng_value']).isdigit() else 50
+    s = d.get('section5_sentiment', {})
+    fv_raw = str(s.get('fng_value', '50'))
+    fv = int(fv_raw) if fv_raw.isdigit() else 50
     fg_cls = 'r' if fv < 25 else 'y' if fv < 50 else 'g'
     inds = "".join([
-        f'<tr><td>{ind["name"]}</td><td class="y">{ind["value"]}</td>'
-        f'<td style="font-size:12px;color:#8b949e">{ind["level"]}</td>'
-        f'<td style="font-size:12px;color:#58a6ff">{ind["signal"]}</td></tr>'
-        for ind in s['indicators']
+        f'<tr><td>{ind.get("name","")}</td>'
+        f'<td class="y">{ind.get("value", ind.get("current", ind.get("score", "")))}</td>'
+        f'<td style="font-size:12px;color:#8b949e">{ind.get("level", ind.get("status",""))}</td>'
+        f'<td style="font-size:12px;color:#58a6ff">{ind.get("signal", ind.get("interpretation",""))}</td></tr>'
+        for ind in s.get('indicators', [])
     ])
     scens = "".join([
-        f'<div style="margin-bottom:9px;font-size:12.5px"><span class="b">▸</span> <strong style="color:#f0f6fc">{sc["name"]}</strong>: <span class="card-body">{sc["content"]}</span></div>'
-        for sc in s['scenarios']
+        f'<div style="margin-bottom:9px;font-size:12.5px"><span class="b">▸</span> <strong style="color:#f0f6fc">{sc.get("name","")}</strong>: <span class="card-body">{sc.get("content", sc.get("description",""))}</span></div>'
+        for sc in s.get('scenarios', [])
     ])
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("📊 시장 심리 정량 분석", d['report_date'])}
+{hdr("📊 시장 심리 정량 분석", d.get('report_date',''))}
 <div class="tag">Sentiment & Quantitative Analysis</div>
 <div class="card" style="margin-bottom:14px">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-    <div class="card-title">종합 판정: <span class="{fg_cls}">{s['overall']}</span></div>
-    <div class="badge br">Fear&Greed {s['fng_value']}/100</div>
+    <div class="card-title">종합 판정: <span class="{fg_cls}">{s.get('overall','')}</span></div>
+    <div class="badge br">Fear&Greed {fv_raw}/100</div>
   </div>
   <table><tr><th>지표</th><th>현재값</th><th>수준</th><th>시그널</th></tr>{inds}</table>
 </div>
 <div class="card" style="margin-bottom:14px">
   <div class="card-title" style="margin-bottom:8px">역발상(Contrarian) 분석</div>
-  <div class="card-body">{s['contrarian_comment']}</div>
+  <div class="card-body">{s.get('contrarian_comment', s.get('contrarian',''))}</div>
 </div>
 <div class="card">
   <div class="card-title" style="margin-bottom:12px">시나리오 전망</div>
@@ -253,8 +263,8 @@ def html_s5(d):
 </body></html>"""
 
 def html_s6(d):
-    s = d['section6_matrix']
-    issues = s['issues']
+    s = d.get('section6_matrix', {})
+    issues = s.get('issues', ['①','②','③','④','⑤'])
     short = [iss[:7] for iss in issues]
     symbols = [['—','▲강화','▲강화','▲강화','▲강화'],
                ['▲강화','—','▲강화','▲강화','▲강화'],
@@ -272,15 +282,15 @@ def html_s6(d):
         matrix_rows += f'<tr><td style="font-size:11px;color:#58a6ff;font-weight:600">{short[i]}</td>{cells}</tr>'
 
     compound = "".join([
-        f'<div class="card"><div class="card-title">{"①②③"[i]} {ef["title"]}</div><div class="card-body">{ef["content"]}</div></div>'
-        for i, ef in enumerate(s['compound_effects'][:3])
+        f'<div class="card"><div class="card-title">{"①②③"[i]} {ef.get("title","")}</div><div class="card-body">{ef.get("content","")}</div></div>'
+        for i, ef in enumerate(s.get('compound_effects', [])[:3])
     ])
     kr_pts = "".join([
         f'<div style="margin-bottom:7px;font-size:12.5px"><span class="b">▸</span> <span class="card-body">{pt}</span></div>'
         for pt in s.get('kr_investor_points', [])
     ])
     return f"""<!DOCTYPE html><html><head><meta charset="UTF-8">{BASE_CSS}</head><body>
-{hdr("⚡ 크로스 임팩트 매트릭스", d['report_date'])}
+{hdr("⚡ 크로스 임팩트 매트릭스", d.get('report_date',''))}
 <div class="tag">Cross-Impact Matrix</div>
 <div class="card" style="margin-bottom:16px">
   <table><tr><th></th>{header_cells}</tr>{matrix_rows}</table>
