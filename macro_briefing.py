@@ -98,19 +98,64 @@ def generate_report(market_data, fear_greed):
 
 섹션별 개수 기준: issues 5개, chains 4~5개, sectors 각 5개, companies 각 5개, indicators 6개, compound_effects 3개"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4000,
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{"role": "user", "content": prompt}]
-    )
+    messages = [{"role": "user", "content": prompt}]
+    tools = [{"type": "web_search_20250305", "name": "web_search"}]
 
-    text = "".join(b.text for b in response.content if hasattr(b, 'text')).strip()
-    if text.startswith('```'):
-        text = text.split('```')[1]
-        if text.startswith('json'):
-            text = text[4:]
-    return json.loads(text.strip())
+    # ── 아gentic loop: 웹검색 툴 호출이 끝날 때까지 반복 ──
+    while True:
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=4000,
+            tools=tools,
+            messages=messages
+        )
+
+        # assistant 메시지 누적
+        messages.append({"role": "assistant", "content": response.content})
+
+        # stop_reason이 end_turn이면 최종 응답
+        if response.stop_reason == "end_turn":
+            break
+
+        # tool_use가 있으면 tool_result를 messages에 추가하고 계속
+        if response.stop_reason == "tool_use":
+            tool_results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": ""  # SDK가 자동으로 웹검색 결과를 채워줌
+                    })
+            messages.append({"role": "user", "content": tool_results})
+        else:
+            break
+
+    # 최종 텍스트 추출
+    text = ""
+    for block in response.content:
+        if hasattr(block, 'text'):
+            text += block.text
+    text = text.strip()
+
+    # 코드블록 제거
+    if '```' in text:
+        parts = text.split('```')
+        for part in parts:
+            if part.startswith('json'):
+                text = part[4:].strip()
+                break
+            elif '{' in part:
+                text = part.strip()
+                break
+
+    # JSON 시작점 찾기
+    start = text.find('{')
+    end = text.rfind('}')
+    if start != -1 and end != -1:
+        text = text[start:end+1]
+
+    return json.loads(text)
 
 # ── 3. 공통 CSS ──────────────────────────────────────────────────────────
 
